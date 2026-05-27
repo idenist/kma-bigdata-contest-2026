@@ -2,7 +2,7 @@
 
 ## 1. 데이터 다운로드
 
-아래 링크에서 데이터 압축 파일을 다운로드합니다.
+아래 링크에서 데이터 압축 파일(gangwon_weather)을 다운로드합니다.
 
 https://drive.google.com/file/d/1cxN7fFsEumHcalbikw0e1Zp-BqF66tRJ/view?usp=sharing
 
@@ -11,11 +11,12 @@ https://drive.google.com/file/d/1cxN7fFsEumHcalbikw0e1Zp-BqF66tRJ/view?usp=shari
 ```text
 project/
 ├─ data/
-│  ├─ AWS지점정보.csv
-│  ├─ 강수량_20191101_20251231.csv
-│  ├─ 기온_20191101_20251231.csv
-│  ├─ 바람_20191101_20251231.csv
-│  └─ 습도_20191101_20251231.csv
+│  ├─ gangwon_weather/
+│  │  ├─ 강수량_20191101_20251231_강원특별자치도.csv
+│  │  ├─ 기온_20191101_20251231_강원특별자치도.csv
+│  │  ├─ 바람_20191101_20251231_강원특별자치도.csv
+│  │  └─ 습도_20191101_20251231_강원특별자치도.csv
+│  └─ data_설명.md
 └─ ...
 ```
 
