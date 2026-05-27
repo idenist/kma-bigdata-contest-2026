@@ -1,86 +1,147 @@
-import os
-import re
-from pathlib import Path
-from typing import Optional
+# load_data.py
 
+import os
+from pathlib import Path
+
+import numpy as np
 import pandas as pd
-import mysql.connector
+import pymysql
 from dotenv import load_dotenv
 
-"""
-CSV 데이터를 MySQL에 적재하는 스크립트
 
-규칙:
-1. AWS지점정보.csv에서 LAW_ADDR이 '강원특별자치도'로 시작하는 STN_ID 추출
-2. 5개 테이블 모두 해당 STN_ID 데이터만 적재
-3. REQUEST_로 시작하는 컬럼은 적재 대상에서 제외
-4. CSV 컬럼명 끝의 '='는 제거
-5. HHMM 계열 시간 코드는 문자열로 유지하고 4자리로 보정
-6. 중복 기본키는 ON DUPLICATE KEY UPDATE로 갱신
-"""
+# =========================
+# 기본 설정
+# =========================
 
-load_dotenv()
+DATA_DIR = Path("./data/gangwon_weather")
 
-MYSQL_CONFIG = {
-    "host": os.getenv("MYSQL_HOST", "localhost"),
-    "port": int(os.getenv("MYSQL_PORT", "3306")),
-    "user": os.getenv("MYSQL_USER", "root"),
-    "password": os.getenv("MYSQL_PASSWORD", ""),
-    "database": os.getenv("MYSQL_DATABASE", "kma_fire_risk"),
+FILE_TABLE_MAP = {
+    "AWS지점정보_강원특별자치도.csv": "station_info",
+    "습도_20191101_20251231_강원특별자치도.csv": "humidity",
+    "강수량_20191101_20251231_강원특별자치도.csv": "precipitation",
+    "기온_20191101_20251231_강원특별자치도.csv": "temperature",
+    "바람_20191101_20251231_강원특별자치도.csv": "wind",
 }
 
-DATA_DIR = Path(os.getenv("DATA_DIR", "./data/raw"))
-BATCH_SIZE = int(os.getenv("BATCH_SIZE", "10000"))
+TABLE_COLUMNS = {
+    "station_info": [
+        "STN_ID",
+        "STN_KO",
+        "LAW_ADDR",
+    ],
 
-FILE_CONFIG = {
-    "station_info": {
-        "path": Path(os.getenv("STATION_INFO_CSV", DATA_DIR / "AWS지점정보.csv")),
-        "columns": [
-            "STN_ID", "LAT", "LON", "STN_SP", "HT", "HT_WD", "LAU", "STN_AD",
-            "STN_KO", "STN_EN", "FCT_ID", "LAW_ID", "BASIN", "LAW_ADDR"
-        ],
-        "pk": ["STN_ID", "LAT", "LON"],
-    },
-    "precipitation": {
-        "path": Path(os.getenv("PRECIPITATION_CSV", DATA_DIR / "강수량_20191101_20251231.csv")),
-        "columns": [
-            "STN_ID", "LAT", "LON", "TMA", "ALTD", "RN_DSUM", "RN_MAX_1HR",
-            "RN_MAX_1HR_OCUR_TMA", "RN_MAX_6HR", "RN_MAX_6HR_OCUR_TMA",
-            "RN_MAX_10M", "RN_MAX_10M_OCUR_TMA"
-        ],
-        "pk": ["STN_ID", "LAT", "LON", "TMA"],
-    },
-    "temperature": {
-        "path": Path(os.getenv("TEMPERATURE_CSV", DATA_DIR / "기온_20191101_20251231.csv")),
-        "columns": [
-            "STN_ID", "LAT", "LON", "TMA", "ALTD", "TA_DAVG", "TMX_DD",
-            "TMX_OCUR_TMA", "TMN_DD", "TMN_OCUR_TMA", "MRNG_TMN",
-            "MRNG_TMN_OCUR_TMA", "DYTM_TMX", "DYTM_TMX_OCUR_TMA",
-            "NGHT_TMN", "NGHT_TMN_OCUR_TMA"
-        ],
-        "pk": ["STN_ID", "LAT", "LON", "TMA"],
-    },
-    "wind": {
-        "path": Path(os.getenv("WIND_CSV", DATA_DIR / "바람_20191101_20251231.csv")),
-        "columns": [
-            "STN_ID", "LAT", "LON", "TMA", "ALTD", "WS_DAVG", "WS_INS_MAX",
-            "WS_INS_MAX_OCUR_TMA", "WD_INS_MAX", "WS_MAX", "WS_MAX_OCUR_TMA",
-            "WD_MAX", "WD_FRQ", "WS_MIX", "WD_MIX"
-        ],
-        "pk": ["STN_ID", "LAT", "LON", "TMA"],
-    },
-    "humidity": {
-        "path": Path(os.getenv("HUMIDITY_CSV", DATA_DIR / "습도_20191101_20251231.csv")),
-        "columns": [
-            "STN_ID", "LAT", "LON", "TMA", "ALTD", "RHM_AVG", "RHM_MIN",
-            "RHM_MIN_OCUR_TMA"
-        ],
-        "pk": ["STN_ID", "LAT", "LON", "TMA"],
-    },
+    "humidity": [
+        "TMA",
+        "STN_ID",
+        "LAT",
+        "LON",
+        "ALTD",
+        "RHM_AVG",
+        "RHM_MIN",
+        "RHM_MIN_OCUR_TMA",
+    ],
+
+    "precipitation": [
+        "TMA",
+        "STN_ID",
+        "LAT",
+        "LON",
+        "ALTD",
+        "RN_DSUM",
+        "RN_MAX_1HR",
+        "RN_MAX_1HR_OCUR_TMA",
+        "RN_MAX_6HR",
+        "RN_MAX_6HR_OCUR_TMA",
+        "RN_MAX_10M",
+        "RN_MAX_10M_OCUR_TMA",
+    ],
+
+    "temperature": [
+        "TMA",
+        "STN_ID",
+        "LAT",
+        "LON",
+        "ALTD",
+        "TA_DAVG",
+        "TMX_DD",
+        "TMX_OCUR_TMA",
+        "TMN_DD",
+        "TMN_OCUR_TMA",
+        "MRNG_TMN",
+        "MRNG_TMN_OCUR_TMA",
+        "DYTM_TMX",
+        "DYTM_TMX_OCUR_TMA",
+        "NGHT_TMN",
+        "NGHT_TMN_OCUR_TMA",
+    ],
+
+    "wind": [
+        "TMA",
+        "STN_ID",
+        "LAT",
+        "LON",
+        "ALTD",
+        "WS_DAVG",
+        "WS_INS_MAX",
+        "WS_INS_MAX_OCUR_TMA",
+        "WD_INS_MAX",
+        "WS_MAX",
+        "WS_MAX_OCUR_TMA",
+        "WD_MAX",
+        "WD_FRQ",
+        "WS_MIX",
+        "WD_MIX",
+    ],
 }
 
-DATE_CODE_COLUMNS = {"TMA"}
-HHMM_CODE_COLUMNS = {
+
+# 컬럼별 결측치 코드
+MISSING_VALUE_MAP = {
+    # humidity
+    "RHM_AVG": [-99.9],
+    "RHM_MIN": [-99.9],
+    "RHM_MIN_OCUR_TMA": [-99.9, "-99.9"],
+
+    # precipitation
+    "RN_DSUM": [-99.9],
+    "RN_MAX_1HR": [-99.9],
+    "RN_MAX_1HR_OCUR_TMA": [-99.9, "-99.9"],
+    "RN_MAX_6HR": [-99.9],
+    "RN_MAX_6HR_OCUR_TMA": [-999, "-999"],
+    "RN_MAX_10M": [-99.9],
+    "RN_MAX_10M_OCUR_TMA": [-99.9, "-99.9"],
+
+    # temperature
+    "TA_DAVG": [-99.9],
+    "TMX_DD": [-99.9],
+    "TMX_OCUR_TMA": [-99.9, "-99.9"],
+    "TMN_DD": [-99.9],
+    "TMN_OCUR_TMA": [-99.9, "-99.9"],
+    "MRNG_TMN": [-99.9],
+    "MRNG_TMN_OCUR_TMA": [-99.9, "-99.9"],
+    "DYTM_TMX": [-99.9],
+    "DYTM_TMX_OCUR_TMA": [-99.9, "-99.9"],
+    "NGHT_TMN": [-99.9],
+    "NGHT_TMN_OCUR_TMA": [-99.9, "-99.9"],
+
+    # wind
+    "WS_DAVG": [-99.9],
+    "WS_INS_MAX": [-99.9],
+    "WS_INS_MAX_OCUR_TMA": [-99.9, "-99.9"],
+    "WD_INS_MAX": [-99.9],
+    "WS_MAX": [-99.9],
+    "WS_MAX_OCUR_TMA": [-99.9, "-99.9"],
+    "WD_MAX": [-99.9],
+    "WD_FRQ": [-99.9],
+    "WS_MIX": [-999],
+    "WD_MIX": [-99.9],
+}
+
+
+# 문자형으로 유지해야 하는 컬럼
+STRING_COLUMNS = {
+    "TMA",
+    "RHM_MIN_OCUR_TMA",
     "RN_MAX_1HR_OCUR_TMA",
     "RN_MAX_6HR_OCUR_TMA",
     "RN_MAX_10M_OCUR_TMA",
@@ -91,253 +152,170 @@ HHMM_CODE_COLUMNS = {
     "NGHT_TMN_OCUR_TMA",
     "WS_INS_MAX_OCUR_TMA",
     "WS_MAX_OCUR_TMA",
-    "RHM_MIN_OCUR_TMA",
+    "STN_KO",
+    "LAW_ADDR",
 }
 
-trim_warning_counts: dict[str, int] = {}
+
+def get_env_variable(name: str) -> str:
+    value = os.getenv(name)
+
+    if value is None or value.strip() == "":
+        raise ValueError(f".env 파일에 {name} 값이 없습니다.")
+
+    return value
 
 
 def get_connection():
-    return mysql.connector.connect(**MYSQL_CONFIG)
-
-
-def clean_column_name(col: str) -> str:
-    """
-    CSV 컬럼명을 MySQL 컬럼명과 맞도록 정리.
-    예:
-        RN_MAX_10M_OCUR_TMA= -> RN_MAX_10M_OCUR_TMA
-        WD_MIX= -> WD_MIX
-        Unnamed: 0 -> UNNAMED_0
-    """
-    col = str(col).strip()
-    col = col.replace("=", "")
-    col = re.sub(r"[^0-9A-Za-z_가-힣]+", "_", col)
-    col = re.sub(r"_+", "_", col)
-    col = col.strip("_")
-    return col
-
-
-def normalize_value(value) -> Optional[str]:
-    """
-    pandas NaN, 결측 문자열, 빈 문자열을 DB NULL로 변환.
-    API 응답에서 값 뒤에 붙는 '='는 제거한다.
-    """
-    if pd.isna(value):
-        return None
-
-    value = str(value).strip()
-
-    if value == "" or value.lower() in {"nan", "none", "null"}:
-        return None
-
-    value = value.rstrip("=").strip()
-    value = re.sub(r"\.0$", "", value)
-
-    if value == "":
-        return None
-
-    return value
-
-
-def normalize_station_id(value) -> Optional[str]:
-    value = normalize_value(value)
-    if value is None:
-        return None
-    return re.sub(r"\.0$", "", value).strip()
-
-
-def fix_code(value, length: int, col_name: str) -> Optional[str]:
-    """
-    TMA, HHMM 계열 코드 보정.
-    - 530 -> 0530
-    - 0 -> 0000
-    - 0700= -> 0700
-    - -999 -> -999
-
-    테이블에서 HHMM 계열 컬럼 길이가 4이므로, 4자를 초과하는 비정상 값은 잘라서 DB 에러를 방지한다.
-    """
-    value = normalize_value(value)
-
-    if value is None:
-        return None
-
-    if value.isdigit():
-        value = value.zfill(length)
-
-    if len(value) > length:
-        trim_warning_counts[col_name] = trim_warning_counts.get(col_name, 0) + 1
-        value = value[:length]
-
-    return value
-
-
-def read_csv_as_str(path: Path) -> pd.DataFrame:
-    if not path.exists():
-        raise FileNotFoundError(f"파일을 찾을 수 없습니다: {path}")
-
-    df = pd.read_csv(path, dtype=str, encoding="utf-8-sig")
-    df.columns = [clean_column_name(c) for c in df.columns]
-
-    drop_cols = [
-        c for c in df.columns
-        if c.upper().startswith("UNNAMED") or c.upper().startswith("REQUEST_")
-    ]
-
-    if drop_cols:
-        df = df.drop(columns=drop_cols)
-        print(f"제외한 컬럼: {drop_cols}")
-
-    return df
-
-
-def get_gangwon_station_ids(station_path: Path) -> set[str]:
-    station_df = read_csv_as_str(station_path)
-
-    if "STN_ID" not in station_df.columns:
-        raise ValueError("관측소 파일에 STN_ID 컬럼이 없습니다.")
-
-    gangwon_df = station_df[
-        station_df["LAW_ADDR"].fillna("").astype(str).str.startswith("강원특별자치도")
-    ].copy()
-
-    station_ids = set(
-        gangwon_df["STN_ID"]
-        .map(normalize_station_id)
-        .dropna()
-        .tolist()
+    return pymysql.connect(
+        host=get_env_variable("MYSQL_HOST"),
+        port=int(get_env_variable("MYSQL_PORT")),
+        user=get_env_variable("MYSQL_USER"),
+        password=get_env_variable("MYSQL_PASSWORD"),
+        database=get_env_variable("MYSQL_DATABASE"),
+        charset="utf8mb4",
+        autocommit=False,
     )
 
-    print(f"강원특별자치도 STN_ID 개수: {len(station_ids)}")
 
-    return station_ids
-
-
-def filter_gangwon_stations(df: pd.DataFrame, station_ids: set[str]) -> pd.DataFrame:
-    if "STN_ID" not in df.columns:
-        raise ValueError("STN_ID 컬럼이 없습니다.")
-
-    df = df.copy()
-    df["STN_ID"] = df["STN_ID"].map(normalize_station_id)
-
-    return df[df["STN_ID"].isin(station_ids)].copy()
+def read_csv_safely(file_path: Path) -> pd.DataFrame:
+    """
+    CSV 인코딩 문제를 대비해서 utf-8-sig 우선, 실패 시 cp949로 읽는다.
+    """
+    try:
+        return pd.read_csv(file_path, encoding="utf-8-sig")
+    except UnicodeDecodeError:
+        return pd.read_csv(file_path, encoding="cp949")
 
 
-def prepare_table_dataframe(df: pd.DataFrame, table_name: str, columns: list[str]) -> pd.DataFrame:
-    df = df.copy()
+def clean_dataframe(df: pd.DataFrame, table_name: str) -> pd.DataFrame:
+    """
+    테이블에 필요한 컬럼만 남기고,
+    결측치 코드를 NULL로 변환한다.
+    """
+    columns = TABLE_COLUMNS[table_name]
 
-    # REQUEST_ 컬럼은 어떤 경우에도 적재 대상에서 제외한다.
-    request_cols = [c for c in df.columns if c.upper().startswith("REQUEST_")]
-    if request_cols:
-        df = df.drop(columns=request_cols)
+    missing_columns = [col for col in columns if col not in df.columns]
+    if missing_columns:
+        raise ValueError(
+            f"{table_name} 테이블 적재에 필요한 컬럼이 CSV에 없습니다: {missing_columns}"
+        )
 
-    for col in columns:
-        if col not in df.columns:
-            df[col] = None
+    df = df[columns].copy()
 
-    df = df[columns]
+    # STN_ID는 정수형으로 변환
+    if "STN_ID" in df.columns:
+        df["STN_ID"] = pd.to_numeric(df["STN_ID"], errors="coerce").astype("Int64")
 
-    for col in df.columns:
-        if col in DATE_CODE_COLUMNS:
-            df[col] = df[col].map(lambda x: fix_code(x, 8, col))
-        elif col in HHMM_CODE_COLUMNS:
-            df[col] = df[col].map(lambda x: fix_code(x, 4, col))
-        else:
-            df[col] = df[col].map(normalize_value)
+    # 문자형 컬럼은 문자열로 유지
+    for col in STRING_COLUMNS:
+        if col in df.columns:
+            df[col] = df[col].astype("string").str.strip()
 
-    pk_cols = FILE_CONFIG[table_name]["pk"]
-    before = len(df)
-    df = df.dropna(subset=pk_cols)
-    after = len(df)
+    # 컬럼별 결측치 코드 치환
+    for col, missing_values in MISSING_VALUE_MAP.items():
+        if col in df.columns:
+            df[col] = df[col].replace(missing_values, np.nan)
 
-    if before != after:
-        print(f"[{table_name}] 기본키 결측 행 제거: {before - after}건")
+    # 빈 문자열도 NULL 처리
+    df = df.replace("", np.nan)
+
+    # pandas NA, NaN을 pymysql이 넣을 수 있는 None으로 변환
+    df = df.astype(object)
+    df = df.where(pd.notnull(df), None)
 
     return df
 
 
-def make_upsert_sql(table_name: str, columns: list[str], pk: list[str]) -> str:
-    col_sql = ", ".join(f"`{col}`" for col in columns)
+def insert_dataframe(conn, table_name: str, df: pd.DataFrame, chunk_size: int = 5000):
+    """
+    DataFrame을 MySQL 테이블에 INSERT한다.
+    중복 PK가 있으면 기존 행을 갱신한다.
+    """
+    columns = TABLE_COLUMNS[table_name]
+
+    column_sql = ", ".join([f"`{col}`" for col in columns])
     placeholder_sql = ", ".join(["%s"] * len(columns))
 
-    update_cols = [col for col in columns if col not in pk]
+    update_sql = ", ".join([
+        f"`{col}` = VALUES(`{col}`)"
+        for col in columns
+        if col not in ["TMA", "STN_ID"]
+    ])
 
-    if update_cols:
-        update_sql = ", ".join(
-            f"`{col}` = VALUES(`{col}`)" for col in update_cols
-        )
-    else:
-        update_sql = f"`{pk[0]}` = `{pk[0]}`"
+    # station_info는 PK가 STN_ID 하나
+    if table_name == "station_info":
+        update_sql = ", ".join([
+            f"`{col}` = VALUES(`{col}`)"
+            for col in columns
+            if col != "STN_ID"
+        ])
 
-    return f"""
-        INSERT INTO `{table_name}` ({col_sql})
+    insert_sql = f"""
+        INSERT INTO `{table_name}` ({column_sql})
         VALUES ({placeholder_sql})
-        ON DUPLICATE KEY UPDATE {update_sql}
+        ON DUPLICATE KEY UPDATE
+        {update_sql};
     """
 
+    records = list(df.itertuples(index=False, name=None))
 
-def insert_dataframe(conn, table_name: str, df: pd.DataFrame, columns: list[str], pk: list[str], batch_size: int = BATCH_SIZE):
-    if df.empty:
-        print(f"[{table_name}] 적재할 데이터가 없습니다.")
+    if not records:
+        print(f"{table_name}: 적재할 데이터가 없습니다.")
         return
 
-    sql = make_upsert_sql(table_name, columns, pk)
-    rows = [tuple(row) for row in df[columns].itertuples(index=False, name=None)]
+    with conn.cursor() as cursor:
+        for start in range(0, len(records), chunk_size):
+            chunk = records[start:start + chunk_size]
+            cursor.executemany(insert_sql, chunk)
 
-    cursor = conn.cursor()
-
-    total = len(rows)
-    for start in range(0, total, batch_size):
-        batch = rows[start:start + batch_size]
-        cursor.executemany(sql, batch)
-        conn.commit()
-        print(f"[{table_name}] {min(start + batch_size, total)}/{total}건 적재 완료")
-
-    cursor.close()
+    print(f"{table_name}: {len(records):,}행 적재 완료")
 
 
-def load_table(conn, table_name: str, config: dict, station_ids: set[str]):
-    path = config["path"]
-    columns = config["columns"]
-    pk = config["pk"]
+def load_table(conn, file_name: str, table_name: str):
+    file_path = DATA_DIR / file_name
 
-    print(f"\n[{table_name}] 파일 로드: {path}")
+    if not file_path.exists():
+        raise FileNotFoundError(f"파일이 존재하지 않습니다: {file_path}")
 
-    df = read_csv_as_str(path)
-    df = filter_gangwon_stations(df, station_ids)
-    df = prepare_table_dataframe(df, table_name, columns)
+    print(f"\n파일 로딩 중: {file_path}")
+    raw_df = read_csv_safely(file_path)
 
-    print(f"[{table_name}] 강원특별자치도 필터 후 행 수: {len(df)}")
+    cleaned_df = clean_dataframe(raw_df, table_name)
 
-    insert_dataframe(conn, table_name, df, columns, pk)
+    print(f"{table_name}: CSV 행 수 {len(raw_df):,}, 정제 후 행 수 {len(cleaned_df):,}")
 
-
-def print_trim_warnings():
-    if not trim_warning_counts:
-        return
-
-    print("\n[주의] 길이가 초과되어 잘린 시간 코드가 있습니다.")
-    for col, count in sorted(trim_warning_counts.items()):
-        print(f"- {col}: {count}건")
-    print("원본 CSV에서 해당 컬럼 값을 확인하는 것을 권장합니다.")
+    insert_dataframe(conn, table_name, cleaned_df)
 
 
 def main():
-    station_path = FILE_CONFIG["station_info"]["path"]
-    station_ids = get_gangwon_station_ids(station_path)
+    load_dotenv()
 
     conn = get_connection()
 
     try:
-        load_table(conn, "station_info", FILE_CONFIG["station_info"], station_ids)
+        # 외래키 때문에 station_info를 먼저 넣어야 함
+        load_order = [
+            ("AWS지점정보_강원특별자치도.csv", "station_info"),
+            ("습도_20191101_20251231_강원특별자치도.csv", "humidity"),
+            ("강수량_20191101_20251231_강원특별자치도.csv", "precipitation"),
+            ("기온_20191101_20251231_강원특별자치도.csv", "temperature"),
+            ("바람_20191101_20251231_강원특별자치도.csv", "wind"),
+        ]
 
-        for table_name in ["precipitation", "temperature", "wind", "humidity"]:
-            load_table(conn, table_name, FILE_CONFIG[table_name], station_ids)
+        for file_name, table_name in load_order:
+            load_table(conn, file_name, table_name)
+
+        conn.commit()
+        print("\n전체 데이터 적재 완료")
+
+    except Exception as e:
+        conn.rollback()
+        print("\n데이터 적재 중 오류가 발생하여 rollback 했습니다.")
+        raise e
 
     finally:
         conn.close()
-
-    print_trim_warnings()
-    print("\n전체 데이터 적재 완료")
 
 
 if __name__ == "__main__":

@@ -1,196 +1,222 @@
+# create_database.py
+
 import os
-import mysql.connector
+import pymysql
 from dotenv import load_dotenv
 
-"""
-MySQL 데이터베이스/테이블 생성 스크립트
 
-사용 전 .env 예시:
-MYSQL_HOST=localhost
-MYSQL_PORT=3306
-MYSQL_USER=root
-MYSQL_PASSWORD=your_password
-MYSQL_DATABASE=kma_fire_risk
-DROP_EXISTING_TABLES=false
-
-주의:
-- CREATE TABLE IF NOT EXISTS는 이미 존재하는 테이블의 컬럼 타입/COMMENT를 변경하지 않습니다.
-- 기존 테이블 구조를 새 정의로 다시 만들고 싶으면 .env에서 DROP_EXISTING_TABLES=true로 설정하세요.
-"""
-
-load_dotenv()
-
-MYSQL_CONFIG = {
-    "host": os.getenv("MYSQL_HOST", "localhost"),
-    "port": int(os.getenv("MYSQL_PORT", "3306")),
-    "user": os.getenv("MYSQL_USER", "root"),
-    "password": os.getenv("MYSQL_PASSWORD", ""),
-}
-
-DB_NAME = os.getenv("MYSQL_DATABASE", "kma_fire_risk")
-DROP_EXISTING_TABLES = os.getenv("DROP_EXISTING_TABLES", "false").lower() in {"1", "true", "yes", "y"}
-
-TABLE_NAMES = [
-    "humidity",
-    "wind",
-    "temperature",
-    "precipitation",
-    "station_info",
-]
-
-
-def get_connection(use_database: bool = False):
-    config = MYSQL_CONFIG.copy()
-    if use_database:
-        config["database"] = DB_NAME
-    return mysql.connector.connect(**config)
-
-
-def execute_statements(cursor, statements):
-    for stmt in statements:
-        stmt = stmt.strip()
-        if stmt:
-            cursor.execute(stmt)
-
-
-CREATE_DATABASE_SQL = f"""
-CREATE DATABASE IF NOT EXISTS `{DB_NAME}`
-DEFAULT CHARACTER SET utf8mb4
-DEFAULT COLLATE utf8mb4_0900_ai_ci;
-"""
-
-
-CREATE_TABLE_SQL_LIST = [
+def get_env_variable(name: str) -> str:
     """
-    CREATE TABLE IF NOT EXISTS `station_info` (
-        `STN_ID` INT NOT NULL COMMENT '지점번호',
-        `LAT` DECIMAL(10, 6) NOT NULL COMMENT '위도(degree)',
-        `LON` DECIMAL(10, 6) NOT NULL COMMENT '경도(degree)',
-        `STN_SP` VARCHAR(50) NULL COMMENT '지점특성코드',
-        `HT` DECIMAL(10, 3) NULL COMMENT '노장해발고도(m)',
-        `HT_WD` DECIMAL(10, 3) NULL COMMENT '풍향/풍속계지상높이(m)',
-        `LAU` VARCHAR(50) NULL COMMENT '라우 시스템 번호',
-        `STN_AD` VARCHAR(50) NULL COMMENT '관리관서번호',
-        `STN_KO` VARCHAR(100) NULL COMMENT '지점명(한글)',
-        `STN_EN` VARCHAR(100) NULL COMMENT '지점명(영문)',
-        `FCT_ID` VARCHAR(50) NULL COMMENT '예보구역코드',
-        `LAW_ID` VARCHAR(50) NULL COMMENT '법정동코드',
-        `BASIN` VARCHAR(50) NULL COMMENT '수계코드',
-        `LAW_ADDR` VARCHAR(255) NULL COMMENT '법정동주소',
-        PRIMARY KEY (`STN_ID`, `LAT`, `LON`)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='관측소 기본정보';
-    """,
-
+    .env에서 필수 환경변수를 가져온다.
+    값이 없으면 명확한 에러를 발생시킨다.
     """
-    CREATE TABLE IF NOT EXISTS `precipitation` (
-        `STN_ID` INT NOT NULL COMMENT '지점번호',
-        `LAT` DECIMAL(10, 6) NOT NULL COMMENT '위도(degree)',
-        `LON` DECIMAL(10, 6) NOT NULL COMMENT '경도(degree)',
-        `TMA` CHAR(8) NOT NULL COMMENT '날짜(yyyymmdd)',
-        `ALTD` DECIMAL(10, 3) NULL COMMENT '해발고도(m)',
-        `RN_DSUM` DECIMAL(10, 3) NULL COMMENT '합계강수량(mm)',
-        `RN_MAX_1HR` DECIMAL(10, 3) NULL COMMENT '1시간최다강수량(mm)',
-        `RN_MAX_1HR_OCUR_TMA` VARCHAR(4) NULL COMMENT '1시간최다강수량 발생시각',
-        `RN_MAX_6HR` DECIMAL(10, 3) NULL COMMENT '6시간최다강수량(mm)',
-        `RN_MAX_6HR_OCUR_TMA` VARCHAR(4) NULL COMMENT '6시간최다강수량 발생시각',
-        `RN_MAX_10M` DECIMAL(10, 3) NULL COMMENT '10분최다강수량(mm)',
-        `RN_MAX_10M_OCUR_TMA` VARCHAR(4) NULL COMMENT '10분최다강수량 발생시각',
-        PRIMARY KEY (`STN_ID`, `LAT`, `LON`, `TMA`)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='강수량';
-    """,
+    value = os.getenv(name)
 
+    if value is None or value.strip() == "":
+        raise ValueError(f".env 파일에 {name} 값이 없습니다.")
+
+    return value
+
+
+def get_connection(database: str | None = None):
     """
-    CREATE TABLE IF NOT EXISTS `temperature` (
-        `STN_ID` INT NOT NULL COMMENT '지점번호',
-        `LAT` DECIMAL(10, 6) NOT NULL COMMENT '위도(degree)',
-        `LON` DECIMAL(10, 6) NOT NULL COMMENT '경도(degree)',
-        `TMA` CHAR(8) NOT NULL COMMENT '날짜(yyyymmdd)',
-        `ALTD` DECIMAL(10, 3) NULL COMMENT '해발고도(m)',
-        `TA_DAVG` DECIMAL(10, 3) NULL COMMENT '평균기온(℃)',
-        `TMX_DD` DECIMAL(10, 3) NULL COMMENT '최고기온(℃)',
-        `TMX_OCUR_TMA` CHAR(4) NULL COMMENT '최고기온 발생시각',
-        `TMN_DD` DECIMAL(10, 3) NULL COMMENT '최저기온(℃)',
-        `TMN_OCUR_TMA` CHAR(4) NULL COMMENT '최저기온 발생시각',
-        `MRNG_TMN` DECIMAL(10, 3) NULL COMMENT '아침최저기온(℃)',
-        `MRNG_TMN_OCUR_TMA` CHAR(4) NULL COMMENT '아침최저기온 발생시각',
-        `DYTM_TMX` DECIMAL(10, 3) NULL COMMENT '낮최고기온(℃)',
-        `DYTM_TMX_OCUR_TMA` CHAR(4) NULL COMMENT '낮최고기온 발생시각',
-        `NGHT_TMN` DECIMAL(10, 3) NULL COMMENT '밤최저기온 (℃)',
-        `NGHT_TMN_OCUR_TMA` CHAR(4) NULL COMMENT '밤최저기온 발생시각',
-        PRIMARY KEY (`STN_ID`, `LAT`, `LON`, `TMA`)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='기온';
-    """,
-
+    MySQL 연결 객체를 생성한다.
+    database가 None이면 특정 DB를 선택하지 않고 접속한다.
     """
-    CREATE TABLE IF NOT EXISTS `wind` (
-        `STN_ID` INT NOT NULL COMMENT '지점번호',
-        `LAT` DECIMAL(10, 6) NOT NULL COMMENT '위도(degree)',
-        `LON` DECIMAL(10, 6) NOT NULL COMMENT '경도(degree)',
-        `TMA` CHAR(8) NOT NULL COMMENT '날짜(yyyymmdd)',
-        `ALTD` DECIMAL(10, 3) NULL COMMENT '해발고도(m)',
-        `WS_DAVG` DECIMAL(10, 3) NULL COMMENT '평균풍속(m/s)',
-        `WS_INS_MAX` DECIMAL(10, 3) NULL COMMENT '최대순간풍속(m/s)',
-        `WS_INS_MAX_OCUR_TMA` CHAR(4) NULL COMMENT '최대순간풍속 발생시각',
-        `WD_INS_MAX` DECIMAL(10, 3) NULL COMMENT '최대순간풍속시풍향(degree)',
-        `WS_MAX` DECIMAL(10, 3) NULL COMMENT '최대풍속(m/s)',
-        `WS_MAX_OCUR_TMA` CHAR(4) NULL COMMENT '최대풍속 발생시각',
-        `WD_MAX` DECIMAL(10, 3) NULL COMMENT '최대풍속시풍향(degree)',
-        `WD_FRQ` DECIMAL(10, 3) NULL COMMENT '최다풍향(degree)',
-        `WS_MIX` DECIMAL(10, 3) NULL COMMENT '합성풍속(m/s)',
-        `WD_MIX` DECIMAL(10, 3) NULL COMMENT '합성풍향(degree)',
-        PRIMARY KEY (`STN_ID`, `LAT`, `LON`, `TMA`)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='바람';
-    """,
+    config = {
+        "host": get_env_variable("MYSQL_HOST"),
+        "port": int(get_env_variable("MYSQL_PORT")),
+        "user": get_env_variable("MYSQL_USER"),
+        "password": get_env_variable("MYSQL_PASSWORD"),
+        "charset": "utf8mb4",
+        "autocommit": True,
+    }
 
+    if database is not None:
+        config["database"] = database
+
+    return pymysql.connect(**config)
+
+
+def create_database(database_name: str):
     """
-    CREATE TABLE IF NOT EXISTS `humidity` (
-        `STN_ID` INT NOT NULL COMMENT '지점번호',
-        `LAT` DECIMAL(10, 6) NOT NULL COMMENT '위도(degree)',
-        `LON` DECIMAL(10, 6) NOT NULL COMMENT '경도(degree)',
-        `TMA` CHAR(8) NOT NULL COMMENT '날짜(yyyymmdd)',
-        `ALTD` DECIMAL(10, 3) NULL COMMENT '해발고도(m)',
-        `RHM_AVG` DECIMAL(10, 3) NULL COMMENT '평균상대습도(%)',
-        `RHM_MIN` DECIMAL(10, 3) NULL COMMENT '최저상대습도(%)',
-        `RHM_MIN_OCUR_TMA` CHAR(4) NULL COMMENT '최저상대습도 발생시각',
-        PRIMARY KEY (`STN_ID`, `LAT`, `LON`, `TMA`)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='습도';
-    """,
-]
+    데이터베이스가 없으면 생성한다.
+    """
+    sql = f"""
+    CREATE DATABASE IF NOT EXISTS `{database_name}`
+    DEFAULT CHARACTER SET utf8mb4
+    DEFAULT COLLATE utf8mb4_general_ci;
+    """
+
+    conn = get_connection()
+
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(sql)
+        print(f"데이터베이스 생성 또는 확인 완료: {database_name}")
+    finally:
+        conn.close()
 
 
-def drop_existing_tables(cursor):
-    cursor.execute("SET FOREIGN_KEY_CHECKS = 0")
-    for table_name in TABLE_NAMES:
-        cursor.execute(f"DROP TABLE IF EXISTS `{table_name}`")
-        print(f"테이블 삭제 완료 또는 존재하지 않음: {table_name}")
-    cursor.execute("SET FOREIGN_KEY_CHECKS = 1")
+def create_tables(database_name: str):
+    """
+    weather_fire_risk 데이터베이스 안에 5개 테이블을 생성한다.
+    """
+    conn = get_connection(database=database_name)
+
+    table_queries = [
+        """
+        CREATE TABLE IF NOT EXISTS station_info (
+            STN_ID INT NOT NULL COMMENT '지점번호',
+            STN_KO VARCHAR(15) COMMENT '지점명(한글)',
+            LAW_ADDR VARCHAR(50) COMMENT '법정동주소',
+
+            PRIMARY KEY (STN_ID)
+        ) ENGINE=InnoDB
+          DEFAULT CHARSET=utf8mb4
+          COLLATE=utf8mb4_general_ci
+          COMMENT='AWS 지점 정보';
+        """,
+
+        """
+        CREATE TABLE IF NOT EXISTS humidity (
+            TMA VARCHAR(8) NOT NULL COMMENT '시각(년월일)',
+            STN_ID INT NOT NULL COMMENT '지점번호',
+            LAT FLOAT COMMENT '위도(degree)',
+            LON FLOAT COMMENT '경도(degree)',
+            ALTD FLOAT COMMENT '노장 해발고도(m)',
+            RHM_AVG FLOAT COMMENT '일평균상대습도, 결측치 -99.9',
+            RHM_MIN FLOAT COMMENT '최저상대습도, 결측치 -99.9',
+            RHM_MIN_OCUR_TMA VARCHAR(4) COMMENT '최저상대습도 발생시각, RHM_MIN이 -99.9이면 결측치',
+
+            PRIMARY KEY (TMA, STN_ID),
+
+            CONSTRAINT fk_humidity_station_info
+                FOREIGN KEY (STN_ID)
+                REFERENCES station_info (STN_ID)
+                ON UPDATE CASCADE
+                ON DELETE RESTRICT
+        ) ENGINE=InnoDB
+          DEFAULT CHARSET=utf8mb4
+          COLLATE=utf8mb4_general_ci
+          COMMENT='습도 관측 데이터';
+        """,
+
+        """
+        CREATE TABLE IF NOT EXISTS precipitation (
+            TMA VARCHAR(8) NOT NULL COMMENT '시각(년월일)',
+            STN_ID INT NOT NULL COMMENT '지점번호',
+            LAT FLOAT COMMENT '위도(degree)',
+            LON FLOAT COMMENT '경도(degree)',
+            ALTD FLOAT COMMENT '해발고도(m)',
+            RN_DSUM FLOAT COMMENT '일합계강수량(mm), 결측치 -99.9',
+            RN_MAX_1HR FLOAT COMMENT '1시간최다강수량(mm), 결측치 -99.9',
+            RN_MAX_1HR_OCUR_TMA VARCHAR(4) COMMENT '1시간최다강수량 발생시각, 결측치 -99.9',
+            RN_MAX_6HR FLOAT COMMENT '6시간최다강수량(mm), 결측치 -99.9',
+            RN_MAX_6HR_OCUR_TMA VARCHAR(12) COMMENT '6시간최다강수량 발생시각, 결측치 -999',
+            RN_MAX_10M FLOAT COMMENT '10분최다강수량(mm), 결측치 -99.9',
+            RN_MAX_10M_OCUR_TMA VARCHAR(4) COMMENT '10분최다강수량 발생시각, 결측치 -99.9',
+
+            PRIMARY KEY (TMA, STN_ID),
+
+            CONSTRAINT fk_precipitation_station_info
+                FOREIGN KEY (STN_ID)
+                REFERENCES station_info (STN_ID)
+                ON UPDATE CASCADE
+                ON DELETE RESTRICT
+        ) ENGINE=InnoDB
+          DEFAULT CHARSET=utf8mb4
+          COLLATE=utf8mb4_general_ci
+          COMMENT='강수량 관측 데이터';
+        """,
+
+        """
+        CREATE TABLE IF NOT EXISTS temperature (
+            TMA VARCHAR(8) NOT NULL COMMENT '시각(년월일)',
+            STN_ID INT NOT NULL COMMENT '지점번호',
+            LAT FLOAT COMMENT '위도(degree)',
+            LON FLOAT COMMENT '경도(degree)',
+            ALTD FLOAT COMMENT '해발고도(m)',
+            TA_DAVG FLOAT COMMENT '일평균기온(℃), 결측치 -99.9',
+            TMX_DD FLOAT COMMENT '일최고기온(℃), 결측치 -99.9',
+            TMX_OCUR_TMA VARCHAR(4) COMMENT '일최고기온 발생시각, TMX_DD가 -99.9이면 결측치',
+            TMN_DD FLOAT COMMENT '일최저기온(℃), 결측치 -99.9',
+            TMN_OCUR_TMA VARCHAR(4) COMMENT '일최저기온 발생시각, TMN_DD가 -99.9이면 결측치',
+            MRNG_TMN FLOAT COMMENT '아침최저기온(℃), 결측치 -99.9',
+            MRNG_TMN_OCUR_TMA VARCHAR(4) COMMENT '아침최저기온 발생시각, MRNG_TMN이 -99.9이면 결측치',
+            DYTM_TMX FLOAT COMMENT '낮최고기온(℃), 결측치 -99.9',
+            DYTM_TMX_OCUR_TMA VARCHAR(4) COMMENT '낮최고기온 발생시각, DYTM_TMX가 -99.9이면 결측치',
+            NGHT_TMN FLOAT COMMENT '밤최저기온(℃), 결측치 -99.9',
+            NGHT_TMN_OCUR_TMA VARCHAR(4) COMMENT '밤최저기온 발생시각, NGHT_TMN이 -99.9이면 결측치',
+
+            PRIMARY KEY (TMA, STN_ID),
+
+            CONSTRAINT fk_temperature_station_info
+                FOREIGN KEY (STN_ID)
+                REFERENCES station_info (STN_ID)
+                ON UPDATE CASCADE
+                ON DELETE RESTRICT
+        ) ENGINE=InnoDB
+          DEFAULT CHARSET=utf8mb4
+          COLLATE=utf8mb4_general_ci
+          COMMENT='기온 관측 데이터';
+        """,
+
+        """
+        CREATE TABLE IF NOT EXISTS wind (
+            TMA VARCHAR(8) NOT NULL COMMENT '시각(년월일)',
+            STN_ID INT NOT NULL COMMENT '지점번호',
+            LAT FLOAT COMMENT '위도(degree)',
+            LON FLOAT COMMENT '경도(degree)',
+            ALTD FLOAT COMMENT '해발고도(m)',
+            WS_DAVG FLOAT COMMENT '일평균풍속(m/s), 결측치 -99.9',
+            WS_INS_MAX FLOAT COMMENT '최대순간풍속(m/s), 결측치 -99.9',
+            WS_INS_MAX_OCUR_TMA VARCHAR(4) COMMENT '최대순간풍속 발생시각, WS_INS_MAX가 -99.9이면 결측치',
+            WD_INS_MAX FLOAT COMMENT '최대순간풍속시풍향(degree), 결측치 -99.9',
+            WS_MAX FLOAT COMMENT '최대풍속(m/s), 결측치 -99.9',
+            WS_MAX_OCUR_TMA VARCHAR(4) COMMENT '최대풍속 발생시각, WS_MAX가 -99.9이면 결측치',
+            WD_MAX FLOAT COMMENT '최대풍속시풍향(degree), 결측치 -99.9',
+            WD_FRQ FLOAT COMMENT '최다풍향(degree), 결측치 -99.9',
+            WS_MIX FLOAT COMMENT '합성풍속(m/s), 결측치 -999',
+            WD_MIX FLOAT COMMENT '합성풍향(degree), 결측치 -99.9',
+
+            PRIMARY KEY (TMA, STN_ID),
+
+            CONSTRAINT fk_wind_station_info
+                FOREIGN KEY (STN_ID)
+                REFERENCES station_info (STN_ID)
+                ON UPDATE CASCADE
+                ON DELETE RESTRICT
+        ) ENGINE=InnoDB
+          DEFAULT CHARSET=utf8mb4
+          COLLATE=utf8mb4_general_ci
+          COMMENT='바람 관측 데이터';
+        """
+    ]
+
+    try:
+        with conn.cursor() as cursor:
+            for query in table_queries:
+                cursor.execute(query)
+
+        print("테이블 생성 또는 확인 완료")
+        print("- station_info")
+        print("- humidity")
+        print("- precipitation")
+        print("- temperature")
+        print("- wind")
+
+    finally:
+        conn.close()
 
 
 def main():
-    conn = get_connection(use_database=False)
-    cursor = conn.cursor()
+    load_dotenv()
 
-    cursor.execute(CREATE_DATABASE_SQL)
-    conn.commit()
+    database_name = get_env_variable("MYSQL_DATABASE")
 
-    cursor.close()
-    conn.close()
-
-    conn = get_connection(use_database=True)
-    cursor = conn.cursor()
-
-    if DROP_EXISTING_TABLES:
-        print("DROP_EXISTING_TABLES=true: 기존 테이블을 삭제한 뒤 다시 생성합니다.")
-        drop_existing_tables(cursor)
-        conn.commit()
-
-    execute_statements(cursor, CREATE_TABLE_SQL_LIST)
-    conn.commit()
-
-    cursor.close()
-    conn.close()
-
-    print(f"데이터베이스 및 테이블 생성 완료: {DB_NAME}")
+    create_database(database_name)
+    create_tables(database_name)
 
 
 if __name__ == "__main__":
