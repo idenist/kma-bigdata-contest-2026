@@ -1,3 +1,4 @@
 .env
 *.csv
 temp/
+*.parquet
