@@ -1,4 +1,4 @@
 .env
 *.csv
-temp/
 *.parquet
+.tmp
