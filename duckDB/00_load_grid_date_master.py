@@ -4,7 +4,7 @@ import argparse
 import re
 from pathlib import Path
 
-from pffdri_common import connect, default_duckdb_path, default_grid_date_root, qname, sql_path
+from pffdri_common import connect, default_duckdb_path, default_grid_date_root, project_path, qname, sql_path
 
 
 PART_RE = re.compile(r"^part\.?(\d+)\.parquet$", re.IGNORECASE)
@@ -31,11 +31,11 @@ def main() -> None:
     parser.add_argument("--table", default="grid_date_master")
     parser.add_argument("--max-part", type=int, default=721)
     parser.add_argument("--threads", type=int, default=4)
-    parser.add_argument("--memory-limit", default="8GB")
+    parser.add_argument("--memory-limit", default="23GB")
     args = parser.parse_args()
 
-    parquet_root = Path(args.parquet_root)
-    db_path = Path(args.duckdb_path)
+    parquet_root = project_path(__file__, args.parquet_root)
+    db_path = project_path(__file__, args.duckdb_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
     files = collect_part_files(parquet_root, args.max_part)

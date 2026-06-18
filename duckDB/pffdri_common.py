@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 import duckdb
@@ -13,15 +14,20 @@ def project_root(script_file: str | Path) -> Path:
 
 
 def default_duckdb_path(script_file: str | Path) -> Path:
-    return project_root(script_file) / "duckDB" / "pffdri.duckdb"
+    return Path("duckDB") / "pffdri.duckdb"
 
 
 def default_master_grid_path(script_file: str | Path) -> Path:
-    return project_root(script_file) / "data" / "master_grid.parquet"
+    return Path("data") / "master_grid.parquet"
 
 
 def default_grid_date_root(script_file: str | Path) -> Path:
-    return project_root(script_file) / "data" / "grid_date_master"
+    return Path("data") / "grid_date_master"
+
+
+def project_path(script_file: str | Path, path: str | Path) -> Path:
+    candidate = Path(path)
+    return candidate if candidate.is_absolute() else project_root(script_file) / candidate
 
 
 def sql_path(path: str | Path) -> str:
@@ -34,6 +40,42 @@ def qname(name: str) -> str:
 
 def sql_string_list(values: list[str]) -> str:
     return ", ".join("'" + v.replace("'", "''") + "'" for v in values)
+
+
+def parquet_source(path: str | Path) -> str:
+    parquet_path = Path(path)
+    pattern = parquet_path if parquet_path.suffix.lower() == ".parquet" else parquet_path / "**" / "*.parquet"
+    return f"read_parquet('{sql_path(pattern)}', union_by_name=true, hive_partitioning=true)"
+
+
+def source_sql(table: str, parquet_path: str | Path | None) -> str:
+    return parquet_source(parquet_path) if parquet_path else qname(table)
+
+
+def copy_options(compression: str, compression_level: int | None, partition_by_month: bool, append: bool = False) -> str:
+    options = ["FORMAT PARQUET", f"COMPRESSION {compression.upper()}"]
+    if compression_level is not None and compression.upper() in {"ZSTD", "GZIP", "BROTLI"}:
+        options.append(f"COMPRESSION_LEVEL {compression_level}")
+    if partition_by_month:
+        options.append("PARTITION_BY (month)")
+    if append:
+        options.append("APPEND")
+    return ", ".join(options)
+
+
+def prepare_export_path(path: Path, overwrite: bool, months: list[str] | None) -> None:
+    if not overwrite:
+        return
+    if months:
+        for month in months:
+            month_path = path / f"month={month}"
+            if month_path.exists():
+                shutil.rmtree(month_path)
+    elif path.exists():
+        if path.is_dir():
+            shutil.rmtree(path)
+        else:
+            path.unlink()
 
 
 def connect(db_path: str | Path, threads: int = 4, memory_limit: str = "8GB") -> duckdb.DuckDBPyConnection:

@@ -5,10 +5,13 @@ from pathlib import Path
 
 from pffdri_common import (
     connect,
+    copy_options,
     default_duckdb_path,
     default_master_grid_path,
     parquet_columns,
+    prepare_export_path,
     print_table_summary,
+    project_path,
     qname,
     require_columns,
     sql_path,
@@ -20,21 +23,24 @@ def main() -> None:
     parser.add_argument("--duckdb-path", default=str(default_duckdb_path(__file__)))
     parser.add_argument("--master-grid", default=str(default_master_grid_path(__file__)))
     parser.add_argument("--output-table", default="feat_power_access_static")
+    parser.add_argument("--export-parquet", help="Parquet file export path.")
+    parser.add_argument("--parquet-only", action="store_true", help="Export Parquet without creating the DuckDB table.")
+    parser.add_argument("--parquet-compression", default="ZSTD", choices=["ZSTD", "SNAPPY", "GZIP", "BROTLI", "LZ4"])
+    parser.add_argument("--parquet-compression-level", type=int, default=6)
+    parser.add_argument("--overwrite-parquet", action="store_true")
     parser.add_argument("--threads", type=int, default=4)
-    parser.add_argument("--memory-limit", default="8GB")
+    parser.add_argument("--memory-limit", default="23GB")
     args = parser.parse_args()
 
-    con = connect(Path(args.duckdb_path), args.threads, args.memory_limit)
-    master_path = Path(args.master_grid)
+    con = connect(project_path(__file__, args.duckdb_path), args.threads, args.memory_limit)
+    master_path = project_path(__file__, args.master_grid)
     require_columns(
         parquet_columns(con, master_path),
         ["grid_id", "pole_count", "nearest_road_dist", "nearest_river_dist", "is_forest"],
         str(master_path),
     )
 
-    con.execute(
-        f"""
-        CREATE OR REPLACE TABLE {qname(args.output_table)} AS
+    select_sql = f"""
         WITH base AS (
             SELECT
                 grid_id,
@@ -61,7 +67,7 @@ def main() -> None:
             FROM base b
             CROSS JOIN stats s
         )
-        SELECT
+        SELECT DISTINCT
             grid_id,
             pole_count,
             pole_n,
@@ -73,9 +79,32 @@ def main() -> None:
             0.45 * pole_n + 0.20 * road_prox + 0.20 * river_far + 0.15 * forest_contact AS pei
         FROM norm
         """
-    )
-    print("[DONE] feat_power_access_static")
-    print_table_summary(con, args.output_table)
+
+    if args.parquet_only and not args.export_parquet:
+        raise ValueError("--parquet-only requires --export-parquet")
+
+    if not args.parquet_only:
+        con.execute(
+            f"""
+            CREATE OR REPLACE TABLE {qname(args.output_table)} AS
+            {select_sql}
+            """
+        )
+        print(f"[DONE] {args.output_table}")
+        print_table_summary(con, args.output_table)
+
+    if args.export_parquet:
+        export_path = project_path(__file__, args.export_parquet)
+        prepare_export_path(export_path, args.overwrite_parquet, None)
+        export_path.parent.mkdir(parents=True, exist_ok=True)
+        con.execute(
+            f"""
+            COPY ({select_sql})
+            TO '{sql_path(export_path)}'
+            ({copy_options(args.parquet_compression, args.parquet_compression_level, False)})
+            """
+        )
+        print(f"[EXPORT] {export_path}")
     con.close()
 
 

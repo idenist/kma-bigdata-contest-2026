@@ -6,11 +6,17 @@ from pathlib import Path
 from pffdri_common import (
     build_date_where,
     connect,
+    copy_options,
     default_duckdb_path,
+    parquet_columns,
+    prepare_export_path,
     print_table_summary,
+    project_path,
     qname,
     require_columns,
     require_table,
+    source_sql,
+    sql_path,
     table_columns,
 )
 
@@ -79,19 +85,30 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Create weather-derived daily features.")
     parser.add_argument("--duckdb-path", default=str(default_duckdb_path(__file__)))
     parser.add_argument("--source-table", default="grid_date_master")
+    parser.add_argument("--source-parquet")
     parser.add_argument("--output-table", default="feat_weather_daily")
+    parser.add_argument("--export-parquet-dir", help="Directory for partitioned Parquet export.")
+    parser.add_argument("--parquet-only", action="store_true", help="Export Parquet without creating the DuckDB table.")
+    parser.add_argument("--parquet-compression", default="ZSTD", choices=["ZSTD", "SNAPPY", "GZIP", "BROTLI", "LZ4"])
+    parser.add_argument("--parquet-compression-level", type=int, default=6)
+    parser.add_argument("--overwrite-parquet", action="store_true")
+    parser.add_argument("--append-parquet", action="store_true", help="Append to an existing partitioned Parquet directory.")
     parser.add_argument("--months", nargs="*")
     parser.add_argument("--start-date")
     parser.add_argument("--end-date")
     parser.add_argument("--weather-scale", choices=["divide10", "none"], default="divide10")
     parser.add_argument("--threads", type=int, default=4)
-    parser.add_argument("--memory-limit", default="8GB")
+    parser.add_argument("--memory-limit", default="23GB")
     args = parser.parse_args()
 
-    con = connect(Path(args.duckdb_path), args.threads, args.memory_limit)
-    require_table(con, args.source_table)
+    duckdb_path = project_path(__file__, args.duckdb_path)
+    source_parquet = project_path(__file__, args.source_parquet) if args.source_parquet else None
+    con = connect(duckdb_path, args.threads, args.memory_limit)
+    if not args.source_parquet:
+        require_table(con, args.source_table)
+    source_columns = parquet_columns(con, source_parquet) if source_parquet else table_columns(con, args.source_table)
     require_columns(
-        table_columns(con, args.source_table),
+        source_columns,
         [
             "grid_id",
             "date",
@@ -110,10 +127,9 @@ def main() -> None:
     )
 
     where_sql = build_date_where(args.months, args.start_date, args.end_date)
+    source = source_sql(args.source_table, source_parquet)
 
-    con.execute(
-        f"""
-        CREATE OR REPLACE TABLE {qname(args.output_table)} AS
+    select_sql = f"""
         WITH weather_base AS (
             SELECT
                 grid_id,
@@ -135,7 +151,7 @@ def main() -> None:
                 TRY_CAST(wind_wd_cos_mean AS DOUBLE) AS wind_wd_cos_mean,
                 {value_expr("rn_day_mean", args.weather_scale)} AS rn_day_mean,
                 {value_expr("rn_day_max", args.weather_scale)} AS rn_day_max
-            FROM {qname(args.source_table)}
+            FROM {source}
             {where_sql}
         ),
         lagged AS (
@@ -227,10 +243,33 @@ def main() -> None:
             day_weight
         FROM dwi_calc
         """
-    )
 
-    print("[DONE] feat_weather_daily")
-    print_table_summary(con, args.output_table, "date")
+    if args.parquet_only and not args.export_parquet_dir:
+        raise ValueError("--parquet-only requires --export-parquet-dir")
+
+    if not args.parquet_only:
+        con.execute(
+            f"""
+            CREATE OR REPLACE TABLE {qname(args.output_table)} AS
+            {select_sql}
+            """
+        )
+        print(f"[DONE] {args.output_table}")
+        print_table_summary(con, args.output_table, "date")
+
+    if args.export_parquet_dir:
+        export_path = project_path(__file__, args.export_parquet_dir)
+        if not args.append_parquet:
+            prepare_export_path(export_path, args.overwrite_parquet, args.months)
+        export_path.parent.mkdir(parents=True, exist_ok=True)
+        con.execute(
+            f"""
+            COPY ({select_sql})
+            TO '{sql_path(export_path)}'
+            ({copy_options(args.parquet_compression, args.parquet_compression_level, True, args.append_parquet)})
+            """
+        )
+        print(f"[EXPORT] {export_path}")
     con.close()
 
 

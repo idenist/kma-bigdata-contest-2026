@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import time
 from pathlib import Path
 
 import duckdb
@@ -72,11 +73,24 @@ def sql_array(paths: list[Path]) -> str:
 
 
 def default_project_paths() -> tuple[Path, Path]:
-    script_path = Path(__file__).resolve()
-    project_root = script_path.parent.parent
-    parquet_root = project_root / "data" / "grid_date_master"
-    duckdb_path = script_path.parent / "pffdri.duckdb"
-    return parquet_root, duckdb_path
+    return Path("data") / "grid_date_master", Path("duckDB") / "pffdri.duckdb"
+
+
+def project_path(path: str | Path) -> Path:
+    candidate = Path(path)
+    if candidate.is_absolute():
+        return candidate
+    return Path(__file__).resolve().parent.parent / candidate
+
+
+def format_seconds(seconds: float) -> str:
+    minutes, sec = divmod(int(seconds), 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours}h {minutes}m {sec}s"
+    if minutes:
+        return f"{minutes}m {sec}s"
+    return f"{sec}s"
 
 
 def main() -> None:
@@ -96,14 +110,15 @@ def main() -> None:
     parser.add_argument("--table", default="grid_date_master", help="DuckDB table name")
     parser.add_argument("--max-part", type=int, default=721, help="Load part files up to this number")
     parser.add_argument("--threads", type=int, default=4)
-    parser.add_argument("--memory-limit", default="8GB")
+    parser.add_argument("--memory-limit", default="23GB")
     parser.add_argument("--append", action="store_true", help="Append instead of CREATE OR REPLACE")
     args = parser.parse_args()
 
-    parquet_root = Path(args.parquet_root)
-    duckdb_path = Path(args.duckdb_path)
+    parquet_root = project_path(args.parquet_root)
+    duckdb_path = project_path(args.duckdb_path)
     duckdb_path.parent.mkdir(parents=True, exist_ok=True)
 
+    started_at = time.perf_counter()
     files = collect_part_files(parquet_root, args.max_part)
     if not files:
         raise FileNotFoundError(f"No part*.parquet files found up to part{args.max_part}: {parquet_root}")
@@ -160,7 +175,7 @@ def main() -> None:
         FROM "{table_name}"
         """
     ).df()
-    print("[DONE] load complete")
+    print(f"[DONE] load complete elapsed={format_seconds(time.perf_counter() - started_at)}")
     print(summary.to_string(index=False))
 
     print("\n[INFO] Month summary")
