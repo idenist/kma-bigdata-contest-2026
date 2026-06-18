@@ -71,7 +71,21 @@ python duckDB/06_fire_target.py
 python duckDB/07_prepare_eda_dataset.py --overwrite
 ```
 
-4. 아래 산출물이 확인된 뒤 기존 DuckDB 삭제를 검토합니다.
+4. 전체 feature 기반 EDA 시각화/요약 리포트를 생성합니다.
+
+```powershell
+python duckDB/08_eda_visual_report.py
+```
+
+생성 위치:
+
+```text
+output/report/eda
+```
+
+`08_eda_visual_report.py`는 지표 컬럼만이 아니라 EDA 샘플에 포함된 기상, 임상, 지형, 접근성, 시간, `grid_id` 기반 요약을 함께 생성합니다. Pearson correlation, feature summary, label/group summary, SVG 차트가 포함됩니다.
+
+5. 아래 산출물이 확인된 뒤 기존 DuckDB 삭제를 검토합니다.
 
 ```text
 output/final/final_feature_daily
@@ -79,6 +93,7 @@ output/target/target_fire_daily_500m.parquet
 output/target/target_fire_daily_1km.parquet
 output/target/target_fire_daily_2km.parquet
 output/eda
+output/report/eda
 ```
 
 삭제할 경우:
@@ -123,6 +138,7 @@ python duckDB/run_all_features.py
 | 05 | `duckDB/05_index_features.py` | `output/stage/feat_pffdri_daily` | FFDRI, P-FFDRI 계산 |
 | 06 | `duckDB/06_fire_target.py` | `output/target/target_fire_daily_*.parquet` | 일별 산불 이력 격자 타깃 생성 |
 | 07 | `duckDB/07_prepare_eda_dataset.py` | `output/eda` | EDA용 양성 전체 + 음성 샘플 생성 |
+| 08 | `duckDB/08_eda_visual_report.py` | `output/report/eda` | 전체 feature 기반 EDA 표/시각화/Pearson 생성 |
 | 99 | `duckDB/99_build_final_dataset.py` | `output/final/final_feature_daily` | 모델링/EDA용 최종 병합 데이터 |
 
 01/03/05/99는 `--append-parquet` 옵션을 지원합니다. 보통 직접 쓸 필요는 없고, `run_all_features.py --mode parquet` 월별/연별 청크 실행 시 자동으로 전달됩니다.
@@ -220,6 +236,22 @@ output/eda/eda_monthly_counts_500m.csv
 ```
 
 `eda_positive_*`는 산불 발생 양성 건 전체, `eda_sample_*`는 양성 전체와 음성 샘플을 합친 파일입니다.
+
+### `output/report/eda`
+
+전체 feature 기반 EDA 리포트입니다.
+
+```text
+output/report/eda/eda_report_500m.md
+output/report/eda/feature_summary_500m.csv
+output/report/eda/pearson_fire_label_500m.csv
+output/report/eda/feature_corr_matrix_500m.csv
+output/report/eda/grid_summary_500m.csv
+output/report/eda/month_summary_500m.csv
+output/report/eda/*.svg
+```
+
+500m, 1km, 2km 단위별로 같은 파일이 생성됩니다.
 
 ## Parquet 결과 읽기
 

@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="420" viewBox="0 0 860 420">
+<rect width="100%" height="100%" fill="white"/>
+<text x="430.0" y="30" text-anchor="middle" font-family="Arial" font-size="20" font-weight="700">1km Positive Mean Scores</text>
+<line x1="90" y1="55" x2="90" y2="340" stroke="#222"/>
+<line x1="90" y1="340" x2="830" y2="340" stroke="#222"/>
+<rect x="108" y="55.00" width="62" height="285.00" fill="#4C78A8"/>
+<text x="139.0" y="362" text-anchor="middle" font-family="Arial" font-size="12">ffdri</text>
+<text x="139.0" y="48.00" text-anchor="middle" font-family="Arial" font-size="12">45.45</text>
+<rect x="188" y="59.43" width="62" height="280.57" fill="#4C78A8"/>
+<text x="219.0" y="362" text-anchor="middle" font-family="Arial" font-size="12">pffdri</text>
+<text x="219.0" y="51.43" text-anchor="middle" font-family="Arial" font-size="12">44.74</text>
+<rect x="268" y="306.63" width="62" height="33.37" fill="#4C78A8"/>
+<text x="299.0" y="362" text-anchor="middle" font-family="Arial" font-size="12">dwi</text>
+<text x="299.0" y="298.63" text-anchor="middle" font-family="Arial" font-size="12">5.32</text>
+<rect x="348" y="313.12" width="62" height="26.88" fill="#4C78A8"/>
+<text x="379.0" y="362" text-anchor="middle" font-family="Arial" font-size="12">fmi</text>
+<text x="379.0" y="305.12" text-anchor="middle" font-family="Arial" font-size="12">4.29</text>
+<rect x="428" y="336.66" width="62" height="3.34" fill="#4C78A8"/>
+<text x="459.0" y="362" text-anchor="middle" font-family="Arial" font-size="12">dwi_n</text>
+<text x="459.0" y="328.66" text-anchor="middle" font-family="Arial" font-size="12">0.53</text>
+<rect x="508" y="336.96" width="62" height="3.04" fill="#4C78A8"/>
+<text x="539.0" y="362" text-anchor="middle" font-family="Arial" font-size="12">pei</text>
+<text x="539.0" y="328.96" text-anchor="middle" font-family="Arial" font-size="12">0.48</text>
+<rect x="588" y="337.31" width="62" height="2.69" fill="#4C78A8"/>
+<text x="619.0" y="362" text-anchor="middle" font-family="Arial" font-size="12">fmi_n</text>
+<text x="619.0" y="329.31" text-anchor="middle" font-family="Arial" font-size="12">0.43</text>
+<rect x="668" y="337.69" width="62" height="2.31" fill="#4C78A8"/>
+<text x="699.0" y="362" text-anchor="middle" font-family="Arial" font-size="12">tmi_p</text>
+<text x="699.0" y="329.69" text-anchor="middle" font-family="Arial" font-size="12">0.37</text>
+<rect x="748" y="339.96" width="62" height="0.04" fill="#4C78A8"/>
+<text x="779.0" y="362" text-anchor="middle" font-family="Arial" font-size="12">ywi</text>
+<text x="779.0" y="331.96" text-anchor="middle" font-family="Arial" font-size="12">0.01</text>
+</svg>
