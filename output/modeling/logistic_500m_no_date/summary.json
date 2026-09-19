@@ -1,0 +1,58 @@
+{
+  "input": "output\\eda\\eda_sample_500m.parquet",
+  "outdir": "output\\modeling\\logistic_500m_no_date",
+  "split": "year",
+  "test_year": 2024,
+  "train_rows": 10169,
+  "test_rows": 2366,
+  "train_positive": 1230,
+  "test_positive": 120,
+  "features": [
+    "ta_mean",
+    "ta_max",
+    "hm_mean",
+    "hm_min",
+    "wind_ws_mean",
+    "wind_ws_max",
+    "rn_day_mean",
+    "rn_day_max",
+    "effective_humidity",
+    "rne",
+    "dwi",
+    "dwi_n",
+    "fmi",
+    "fmi_n",
+    "ffdri",
+    "day_weight",
+    "elevation",
+    "slope",
+    "aspect_sin",
+    "aspect_cos",
+    "tmi_base_n",
+    "tmi_p",
+    "ywi",
+    "Da",
+    "Ws",
+    "Dr",
+    "pole_count",
+    "pole_n",
+    "road_prox",
+    "river_far",
+    "pei",
+    "pffdri"
+  ],
+  "default_threshold": 0.5,
+  "best_f1_threshold": 0.5086947470434002,
+  "best_f1": 0.22282608695652173,
+  "confusion_matrix_threshold_0_5": [
+    [
+      1687,
+      559
+    ],
+    [
+      36,
+      84
+    ]
+  ],
+  "classification_report_threshold_0_5": "              precision    recall  f1-score   support\n\n           0     0.9791    0.7511    0.8501      2246\n           1     0.1306    0.7000    0.2202       120\n\n    accuracy                         0.7485      2366\n   macro avg     0.5549    0.7256    0.5351      2366\nweighted avg     0.9361    0.7485    0.8181      2366\n"
+}

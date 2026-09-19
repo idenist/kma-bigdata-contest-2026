@@ -1,0 +1,30 @@
+{
+  "grid_date_master": "output/final/final_feature_daily",
+  "out_dir": "outputs\\single_index_baseline_1km",
+  "score_cols": [
+    "dwi",
+    "ffdri",
+    "pffdri"
+  ],
+  "topk": [
+    100,
+    500,
+    1000,
+    5000
+  ],
+  "test_years": [
+    2024
+  ],
+  "months": [
+    2,
+    3,
+    4,
+    5
+  ],
+  "sample_cache_dir": "outputs/sample_cache_1km_hard_neg100",
+  "label_cache": null,
+  "master_grid": null,
+  "fire_history": null,
+  "radius_m": 1000,
+  "save_monthly_scores": false
+}

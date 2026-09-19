@@ -3,3 +3,4 @@
 *.parquet
 .tmp
 .docx
+*.duckdb

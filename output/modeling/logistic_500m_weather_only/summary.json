@@ -1,0 +1,39 @@
+{
+  "input": "output\\eda\\eda_sample_500m.parquet",
+  "outdir": "output\\modeling\\logistic_500m_weather_only",
+  "split": "year",
+  "test_year": 2024,
+  "train_rows": 10169,
+  "test_rows": 2366,
+  "train_positive": 1230,
+  "test_positive": 120,
+  "features": [
+    "ta_mean",
+    "ta_max",
+    "hm_mean",
+    "hm_min",
+    "wind_ws_mean",
+    "wind_ws_max",
+    "rn_day_mean",
+    "rn_day_max",
+    "effective_humidity",
+    "rne",
+    "dwi",
+    "dwi_n",
+    "day_weight"
+  ],
+  "default_threshold": 0.5,
+  "best_f1_threshold": 0.6261979868342963,
+  "best_f1": 0.23441396508728182,
+  "confusion_matrix_threshold_0_5": [
+    [
+      1684,
+      562
+    ],
+    [
+      45,
+      75
+    ]
+  ],
+  "classification_report_threshold_0_5": "              precision    recall  f1-score   support\n\n           0     0.9740    0.7498    0.8473      2246\n           1     0.1177    0.6250    0.1982       120\n\n    accuracy                         0.7434      2366\n   macro avg     0.5459    0.6874    0.5227      2366\nweighted avg     0.9305    0.7434    0.8144      2366\n"
+}

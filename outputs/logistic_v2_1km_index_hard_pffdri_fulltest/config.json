@@ -1,0 +1,44 @@
+{
+  "master_grid": "data/master_grid.parquet",
+  "grid_date_master": "output/final/final_feature_daily",
+  "fire_history": "data/산불발생이력.csv",
+  "out_dir": "outputs/logistic_v2_1km_index_hard_pffdri_fulltest",
+  "label_cache": null,
+  "sample_cache_dir": "outputs/sample_cache_1km_hard_neg100",
+  "force_resample": false,
+  "radius_m": 1000,
+  "neg_ratio": 100,
+  "sample_strategy": "hard",
+  "hard_negative_frac": 0.7,
+  "hard_score_col": "pffdri",
+  "hard_pool_multiplier": 5,
+  "feature_set": "index_only",
+  "random_state": 42,
+  "train_years": [
+    2020,
+    2021,
+    2022
+  ],
+  "valid_years": [
+    2023
+  ],
+  "test_years": [
+    2024
+  ],
+  "months": [
+    2,
+    3,
+    4,
+    5
+  ],
+  "topk": [
+    100,
+    500,
+    1000,
+    5000
+  ],
+  "class_weight": "balanced",
+  "max_iter": 200,
+  "eval_full_test": true,
+  "save_full_test_scores": false
+}

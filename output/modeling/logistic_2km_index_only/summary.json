@@ -1,0 +1,29 @@
+{
+  "input": "output\\eda\\eda_sample_2km.parquet",
+  "outdir": "output\\modeling\\logistic_2km_index_only",
+  "split": "year",
+  "test_year": 2024,
+  "train_rows": 133749,
+  "test_rows": 31254,
+  "train_positive": 16139,
+  "test_positive": 1527,
+  "features": [
+    "dwi",
+    "ffdri",
+    "pffdri"
+  ],
+  "default_threshold": 0.5,
+  "best_f1_threshold": 0.641462729290932,
+  "best_f1": 0.33172991270265456,
+  "confusion_matrix_threshold_0_5": [
+    [
+      22197,
+      7530
+    ],
+    [
+      124,
+      1403
+    ]
+  ],
+  "classification_report_threshold_0_5": "              precision    recall  f1-score   support\n\n           0     0.9944    0.7467    0.8529     29727\n           1     0.1571    0.9188    0.2683      1527\n\n    accuracy                         0.7551     31254\n   macro avg     0.5758    0.8327    0.5606     31254\nweighted avg     0.9535    0.7551    0.8244     31254\n"
+}
